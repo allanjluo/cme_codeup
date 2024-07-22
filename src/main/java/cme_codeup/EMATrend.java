@@ -1,6 +1,6 @@
 package cme_codeup;
 
-import java.io.*
+import java.io.*;
 
 public class EMATrend {
     public static enum ETrend {

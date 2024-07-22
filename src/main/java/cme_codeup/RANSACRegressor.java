@@ -5,36 +5,55 @@ import org.apache.commons.math3.linear.LUDecomposition;
 import org.apache.commons.math3.linear.RealMatrix;
 import org.apache.commons.math3.linear.RealVector;
 import org.apache.commons.math3.linear.ArrayRealVector;
+
 import java.util.ArrayList;
 import java.util.List;
+import java.util.ArrayDeque;
+import java.util.Deque;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Random;
+
 
 public class RANSACRegressor {
 
     private double desiredProbability;
     private double[] bestModel;
+    private Deque<Double> dataQueue;
     private List<Integer> inlierIndices;
     private int maxTrials;
     private double residualThreshold;
     private boolean useDefaultMaxTrials;
     private boolean useDefaultResidualThreshold;
+    private int windowSize;
     private int lastFitLength; // To keep track of the length of the last fitted array
 
     // Constructor with desiredProbability and default maxTrials and residualThreshold
-    public RANSACRegressor(double desiredProbability) {
+    public RANSACRegressor(double desiredProbability, int windowSize) {
         this.desiredProbability = desiredProbability;
+        this.windowSize = windowSize;
+        this.dataQueue = new ArrayDeque<>(windowSize);
         this.useDefaultMaxTrials = true;
         this.useDefaultResidualThreshold = true;
         this.lastFitLength = 0;
     }
 
     // Constructor with specified maxTrials and residualThreshold
-    public RANSACRegressor(int maxTrials, double residualThreshold) {
+    public RANSACRegressor(int maxTrials, double residualThreshold, int windowSize) {
         this.maxTrials = maxTrials;
         this.residualThreshold = residualThreshold;
+        this.windowSize = windowSize;
+        this.dataQueue = new ArrayDeque<>(windowSize);
         this.useDefaultMaxTrials = false;
         this.useDefaultResidualThreshold = false;
         this.lastFitLength = 0;
+    }
+
+    public void append(double value) {
+        if (dataQueue.size() >= windowSize) {
+            dataQueue.poll();
+        }
+        dataQueue.offer(value);
     }
 
     private void calculateMaxTrials(int nSamples, double outlierRatio, int minSamples) {
@@ -64,7 +83,12 @@ public class RANSACRegressor {
         }
     }
 
-    public void fit(double[] y) {
+    public void fit() {
+        if (dataQueue.isEmpty()) {
+            throw new IllegalStateException("No data to fit the model.");
+        }
+
+        double[] y = dataQueue.stream().mapToDouble(Double::doubleValue).toArray();
         int nSamples = y.length;
         int minSamples = 2; // Minimum two points needed to fit a line
         double outlierRatio = 0.5; // Assuming half the data might be outliers
@@ -153,7 +177,6 @@ public class RANSACRegressor {
         return model[0] + model[1] * x[0];
     }
 
-    // Refactored linear model fitting method using matrix operations
     private double[] fitLinearModel(double[] x, double[] y) {
         int n = x.length;
 
@@ -221,18 +244,28 @@ public class RANSACRegressor {
         return theta.toArray();
     }
 
+    public double[] getParams() {
+        if (bestModel == null) {
+            throw new IllegalStateException("Model has not been fitted or no valid model found.");
+        }
+        return bestModel;
+    }
+
     public static void main(String[] args) {
-        double[] y = {
-            3.4, 2.5, 3.5, 4.5, 3.0,
-            2.7, 3.5, 8.5, 4.5, 2.0,
-            3.6, 5.2, 7.0, 2.9, 3.8
-        };
+        RANSACRegressor ransacDefault = new RANSACRegressor(0.99, 10); // Desired probability of 99% and window size of 10
 
-        // Using default maxTrials and residualThreshold
-        RANSACRegressor ransacDefault = new RANSACRegressor(0.99); // Desired probability of 99%
-        ransacDefault.fit(y);
+        double[] yValues = {3.4, 2.5, 3.5, 4.5, 3.0, 2.7, 3.5, 8.5, 4.5, 2.0};
+        for (double y : yValues) {
+            ransacDefault.append(y);
+        }
 
-        double[] testPoints = {1, 7, 10, 15};
+        ransacDefault.fit();
+
+        double[] params = ransacDefault.getParams();
+        System.out.println("Slope: " + params[1]);
+        System.out.println("Intercept: " + params[0]);
+
+        double[] testPoints = {1, 7, 10};
         double[] predictionsDefault = ransacDefault.predict(testPoints);
         for (int i = 0; i < testPoints.length; i++) {
             System.out.println("Prediction with default values for time " + testPoints[i] + ": " + predictionsDefault[i]);
@@ -240,21 +273,7 @@ public class RANSACRegressor {
 
         double[] nextPredictionsDefault = ransacDefault.next(2);
         for (int i = 0; i < nextPredictionsDefault.length; i++) {
-            System.out.println("Next prediction with default values for time " + (y.length + i + 1) + ": " + nextPredictionsDefault[i]);
-        }
-
-        // Using specified maxTrials and residualThreshold
-        RANSACRegressor ransacSpecified = new RANSACRegressor(100, 1.0); // maxTrials 100, residualThreshold 1.0
-        ransacSpecified.fit(y);
-
-        double[] predictionsSpecified = ransacSpecified.predict(testPoints);
-        for (int i = 0; i < testPoints.length; i++) {
-            System.out.println("Prediction with specified values for time " + testPoints[i] + ": " + predictionsSpecified[i]);
-        }
-
-        double[] nextPredictionsSpecified = ransacSpecified.next(2);
-        for (int i = 0; i < nextPredictionsSpecified.length; i++) {
-            System.out.println("Next prediction with specified values for time " + (y.length + i + 1) + ": " + nextPredictionsSpecified[i]);
+            System.out.println("Next prediction with default values for time " + (yValues.length + i + 1) + ": " + nextPredictionsDefault[i]);
         }
     }
 }
