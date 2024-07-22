@@ -1,15 +1,10 @@
 package cme_codeup;
 
-import org.apache.commons.math3.linear.Array2DRowRealMatrix;
-import org.apache.commons.math3.linear.LUDecomposition;
-import org.apache.commons.math3.linear.RealMatrix;
-import org.apache.commons.math3.linear.RealVector;
-import org.apache.commons.math3.linear.ArrayRealVector;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 
-public class RANSACRegressor {
+public class RANSACRegressorNaive {
 
     private double desiredProbability;
     private double[] bestModel;
@@ -21,7 +16,7 @@ public class RANSACRegressor {
     private int lastFitLength; // To keep track of the length of the last fitted array
 
     // Constructor with desiredProbability and default maxTrials and residualThreshold
-    public RANSACRegressor(double desiredProbability) {
+    public RANSACRegressorNaive(double desiredProbability) {
         this.desiredProbability = desiredProbability;
         this.useDefaultMaxTrials = true;
         this.useDefaultResidualThreshold = true;
@@ -29,7 +24,7 @@ public class RANSACRegressor {
     }
 
     // Constructor with specified maxTrials and residualThreshold
-    public RANSACRegressor(int maxTrials, double residualThreshold) {
+    public RANSACRegressorNaive(int maxTrials, double residualThreshold) {
         this.maxTrials = maxTrials;
         this.residualThreshold = residualThreshold;
         this.useDefaultMaxTrials = false;
@@ -153,72 +148,35 @@ public class RANSACRegressor {
         return model[0] + model[1] * x[0];
     }
 
-    // Refactored linear model fitting method using matrix operations
     private double[] fitLinearModel(double[] x, double[] y) {
         int n = x.length;
-
-        // Construct the design matrix X
-        double[][] X = new double[n][2];
+        double xSum = 0, ySum = 0, xySum = 0, xxSum = 0;
         for (int i = 0; i < n; i++) {
-            X[i][0] = 1;  // Intercept term
-            X[i][1] = x[i];
+            xSum += x[i];
+            ySum += y[i];
+            xySum += x[i] * y[i];
+            xxSum += x[i] * x[i];
         }
-
-        // Convert to RealMatrix
-        RealMatrix XMatrix = new Array2DRowRealMatrix(X);
-
-        // Convert y to RealVector
-        RealVector yVector = new ArrayRealVector(y);
-
-        // Compute X^T * X
-        RealMatrix XT = XMatrix.transpose();
-        RealMatrix XTX = XT.multiply(XMatrix);
-
-        // Compute (X^T * X)^-1
-        RealMatrix XTXInv = new LUDecomposition(XTX).getSolver().getInverse();
-
-        // Compute X^T * y
-        RealVector XTy = XT.operate(yVector);
-
-        // Compute theta = (X^T * X)^-1 * X^T * y
-        RealVector theta = XTXInv.operate(XTy);
-
-        // Return as double array
-        return theta.toArray();
+        double[] theta = new double[2];
+        theta[1] = (n * xySum - xSum * ySum) / (n * xxSum - xSum * xSum);
+        theta[0] = (ySum - theta[1] * xSum) / n;
+        return theta;
     }
 
-    // Simplified version for single y array
     private double[] fitLinearModel(double[] y) {
         int n = y.length;
-
-        // Construct the design matrix X
-        double[][] X = new double[n][2];
+        double xSum = 0, ySum = 0, xySum = 0, xxSum = 0;
         for (int i = 0; i < n; i++) {
-            X[i][0] = 1;  // Intercept term
-            X[i][1] = i + 1;
+            double x = i + 1;
+            xSum += x;
+            ySum += y[i];
+            xySum += x * y[i];
+            xxSum += x * x;
         }
-
-        // Convert to RealMatrix
-        RealMatrix XMatrix = new Array2DRowRealMatrix(X);
-
-        // Convert y to RealVector
-        RealVector yVector = new ArrayRealVector(y);
-
-        // Compute X^T * X
-        RealMatrix XT = XMatrix.transpose();
-        RealMatrix XTX = XT.multiply(XMatrix);
-
-        // Compute (X^T * X)^-1
-        RealMatrix XTXInv = new LUDecomposition(XTX).getSolver().getInverse();
-
-        // Compute X^T * y
-        RealVector XTy = XT.operate(yVector);
-
-        // Compute theta = (X^T * X)^-1 * X^T * y
-        RealVector theta = XTXInv.operate(XTy);
-
-        // Return as double array
-        return theta.toArray();
+        double[] theta = new double[2];
+        theta[1] = (n * xySum - xSum * ySum) / (n * xxSum - xSum * xSum);
+        theta[0] = (ySum - theta[1] * xSum) / n;
+        return theta;
     }
 
     public static void main(String[] args) {
@@ -229,7 +187,7 @@ public class RANSACRegressor {
         };
 
         // Using default maxTrials and residualThreshold
-        RANSACRegressor ransacDefault = new RANSACRegressor(0.99); // Desired probability of 99%
+        RANSACRegressorNaive ransacDefault = new RANSACRegressorNaive(0.99); // Desired probability of 99%
         ransacDefault.fit(y);
 
         double[] testPoints = {1, 7, 10, 15};
@@ -244,7 +202,7 @@ public class RANSACRegressor {
         }
 
         // Using specified maxTrials and residualThreshold
-        RANSACRegressor ransacSpecified = new RANSACRegressor(100, 1.0); // maxTrials 100, residualThreshold 1.0
+        RANSACRegressorNaive ransacSpecified = new RANSACRegressorNaive(100, 1.0); // maxTrials 100, residualThreshold 1.0
         ransacSpecified.fit(y);
 
         double[] predictionsSpecified = ransacSpecified.predict(testPoints);
